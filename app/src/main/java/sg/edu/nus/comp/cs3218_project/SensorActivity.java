@@ -4,6 +4,7 @@ import android.content.Intent;
 import android.net.Uri;
 import android.os.Environment;
 import android.provider.MediaStore;
+import android.app.Activity;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
@@ -13,7 +14,7 @@ import java.io.File;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 
-public class SensorActivity extends AppCompatActivity {
+public class SensorActivity extends Activity {
     private static final int CAPTURE_VIDEO_ACTIVITY_REQUEST_CODE = 200;
     private Uri fileUri;
 
