@@ -274,7 +274,7 @@ public class VideoFragment extends Fragment
 
         accManager = (SensorManager)mActivity.getSystemService(mActivity.SENSOR_SERVICE);
         accelerometer = accManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
-        accManager.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_NORMAL);
+        accManager.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_GAME);
         acceleration = (TextView) getView().findViewById(R.id.acceleration);
     }
 
@@ -294,6 +294,7 @@ public class VideoFragment extends Fragment
         acceleration.setText("X: "+event.values[0]+
                 "\nY: "+event.values[1]+
                 "\nZ: "+event.values[2]);
+        Log.d("Accelerometer", "" + event.timestamp);
     }
     
     @Override
@@ -545,7 +546,7 @@ public class VideoFragment extends Fragment
         public void onCaptureStarted(CameraCaptureSession session, CaptureRequest request, long timestamp, long frameNumber) {
             super.onCaptureStarted(session, request, timestamp, frameNumber);
             if (mIsRecordingVideo) {
-                Log.d("OnCaptureStarted", frameNumber + " " + timestamp);
+                Log.d("OnCaptureStarted", System.currentTimeMillis() + " " + timestamp);
             }
         }
     };
