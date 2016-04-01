@@ -54,7 +54,7 @@ import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 
 public class VideoFragment extends Fragment
-        implements View.OnClickListener, FragmentCompat.OnRequestPermissionsResultCallback {
+        implements View.OnClickListener, SensorEventListener, FragmentCompat.OnRequestPermissionsResultCallback {
 
     private static final SparseIntArray ORIENTATIONS = new SparseIntArray();
 
