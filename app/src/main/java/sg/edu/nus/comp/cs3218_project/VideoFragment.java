@@ -39,6 +39,10 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.Toast;
+import android.hardware.Sensor;
+import android.hardware.SensorEvent;
+import android.hardware.SensorEventListener;
+import android.hardware.SensorManager;
 
 import java.io.File;
 import java.io.IOException;
@@ -57,6 +61,12 @@ public class VideoFragment extends Fragment
     private static final String TAG = "VideoFragment";
     private static final int REQUEST_VIDEO_PERMISSIONS = 1;
     private static final String FRAGMENT_DIALOG = "dialog";
+
+    private Sensor accelerometer;
+    private SensorManager accManager;
+    private TextView acceleration;
+    private Activity mActivity;
+
 
     private static final String[] VIDEO_PERMISSIONS = {
             Manifest.permission.CAMERA,
@@ -260,8 +270,31 @@ public class VideoFragment extends Fragment
         mTextureView = (AutoFitTextureView) view.findViewById(R.id.texture);
         mButtonVideo = (Button) view.findViewById(R.id.video);
         mButtonVideo.setOnClickListener(this);
+
+        accManager = (SensorManager)mActivity.getSystemService(mActivity.SENSOR_SERVICE);
+        accelerometer = accManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
+        accManager.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_NORMAL);
+        acceleration = (TextView) getView().findViewById(R.id.acceleration);
     }
 
+    @Override
+    public void onAttach(Activity activity) {
+        super.onAttach(activity);
+        mActivity = activity;
+    }
+
+    @Override
+    public void onAccuracyChanged(Sensor sensor, int accuracy){
+
+    }
+
+    @Override
+    public void onSensorChanged (SensorEvent event){
+        acceleration.setText("X: "+event.values[0]+
+                "\nY: "+event.values[1]+
+                "\nZ: "+event.values[2]);
+    }
+    
     @Override
     public void onResume() {
         super.onResume();
