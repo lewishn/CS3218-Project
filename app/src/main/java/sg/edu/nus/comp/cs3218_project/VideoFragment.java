@@ -43,6 +43,7 @@ import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
+import android.widget.TextView;
 
 import java.io.File;
 import java.io.IOException;
