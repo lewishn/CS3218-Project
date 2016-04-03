@@ -64,6 +64,7 @@ public class VideoFragment extends Fragment
     private static final String FRAGMENT_DIALOG = "dialog";
 
     private Sensor accelerometer;
+    private Sensor gyroscope;
     private SensorManager accManager;
     private TextView acceleration;
     private Activity mActivity;
@@ -274,7 +275,9 @@ public class VideoFragment extends Fragment
 
         accManager = (SensorManager)mActivity.getSystemService(mActivity.SENSOR_SERVICE);
         accelerometer = accManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
-        accManager.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_GAME);
+        gyroscope = accManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE);
+        accManager.registerListener(this, gyroscope, SensorManager.SENSOR_DELAY_NORMAL);
+        accManager.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_NORMAL);
         acceleration = (TextView) getView().findViewById(R.id.acceleration);
     }
 
@@ -289,11 +292,25 @@ public class VideoFragment extends Fragment
 
     }
 
+
+    private float[] accelData = {0,0,0};
+    private float[] gyroData = {0,0,0};
     @Override
     public void onSensorChanged (SensorEvent event){
-        acceleration.setText("X: "+event.values[0]+
-                "\nY: "+event.values[1]+
-                "\nZ: "+event.values[2]);
+        if (event.sensor.getType() == Sensor.TYPE_ACCELEROMETER) {
+            accelData = event.values;
+        } else {
+            gyroData = event.values;
+        }
+        acceleration.setText("X: " + accelData[0] +
+                "\nY: " + accelData[1] +
+                "\nZ: " + accelData[2] +
+                "\ngX: " + gyroData[0] +
+                        "\ngY: " + gyroData[1] +
+                        "\ngZ: " + gyroData[2]
+        );
+
+
         Log.d("Accelerometer", "" + event.timestamp);
     }
     

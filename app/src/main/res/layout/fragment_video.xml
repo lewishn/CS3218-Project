@@ -30,6 +30,7 @@ android:layout_height="match_parent">
             android:layout_height="wrap_content"
             android:textAppearance="?android:attr/textAppearanceMedium"
             android:text="X: Y; Z:"
+            android:textColor="#FFFFFF"
             android:id="@+id/acceleration"
             android:layout_alignParentTop="true"
             android:layout_alignParentEnd="true" />
