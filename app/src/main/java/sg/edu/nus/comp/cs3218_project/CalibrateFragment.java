@@ -13,6 +13,10 @@ import android.content.res.Configuration;
 import android.graphics.Matrix;
 import android.graphics.RectF;
 import android.graphics.SurfaceTexture;
+import android.hardware.Sensor;
+import android.hardware.SensorEvent;
+import android.hardware.SensorEventListener;
+import android.hardware.SensorManager;
 import android.hardware.camera2.CameraAccessException;
 import android.hardware.camera2.CameraCaptureSession;
 import android.hardware.camera2.CameraCharacteristics;
@@ -37,12 +41,8 @@ import android.view.TextureView;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
-import android.widget.Toast;
-import android.hardware.Sensor;
-import android.hardware.SensorEvent;
-import android.hardware.SensorEventListener;
-import android.hardware.SensorManager;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import java.io.File;
 import java.io.IOException;
@@ -53,12 +53,12 @@ import java.util.List;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 
-public class VideoFragment extends Fragment
+public class CalibrateFragment extends Fragment
         implements View.OnClickListener, SensorEventListener, FragmentCompat.OnRequestPermissionsResultCallback {
 
     private static final SparseIntArray ORIENTATIONS = new SparseIntArray();
 
-    private static final String TAG = "VideoFragment";
+    private static final String TAG = "CalibrateFragment";
     private static final int REQUEST_VIDEO_PERMISSIONS = 1;
     private static final String FRAGMENT_DIALOG = "dialog";
 
@@ -92,12 +92,12 @@ public class VideoFragment extends Fragment
     private Button mButtonVideo;
 
     /**
-     * A refernce to the opened {@link android.hardware.camera2.CameraDevice}.
+     * A refernce to the opened {@link CameraDevice}.
      */
     private CameraDevice mCameraDevice;
 
     /**
-     * A reference to the current {@link android.hardware.camera2.CameraCaptureSession} for
+     * A reference to the current {@link CameraCaptureSession} for
      * preview.
      */
     private CameraCaptureSession mPreviewSession;
@@ -133,12 +133,12 @@ public class VideoFragment extends Fragment
     };
 
     /**
-     * The {@link android.util.Size} of camera preview.
+     * The {@link Size} of camera preview.
      */
     private Size mPreviewSize;
 
     /**
-     * The {@link android.util.Size} of video recording.
+     * The {@link Size} of video recording.
      */
     private Size mVideoSize;
 
@@ -207,8 +207,8 @@ public class VideoFragment extends Fragment
 
     };
 
-    public static VideoFragment newInstance() {
-        return new VideoFragment();
+    public static CalibrateFragment newInstance() {
+        return new CalibrateFragment();
     }
 
     /**
@@ -312,7 +312,7 @@ public class VideoFragment extends Fragment
 
         Log.d("Accelerometer", "" + event.timestamp);
     }
-    
+
     @Override
     public void onResume() {
         super.onResume();
@@ -572,7 +572,7 @@ public class VideoFragment extends Fragment
     }
 
     /**
-     * Configures the necessary {@link android.graphics.Matrix} transformation to `mTextureView`.
+     * Configures the necessary {@link Matrix} transformation to `mTextureView`.
      * This method should not to be called until the camera preview size is determined in
      * openCamera, or until the size of `mTextureView` is fixed.
      *
