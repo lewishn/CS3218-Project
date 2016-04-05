@@ -271,13 +271,6 @@ public class VideoFragment extends Fragment
         mTextureView = (AutoFitTextureView) view.findViewById(R.id.texture);
         mButtonVideo = (Button) view.findViewById(R.id.video);
         mButtonVideo.setOnClickListener(this);
-
-        sensorManager = (SensorManager)mActivity.getSystemService(mActivity.SENSOR_SERVICE);
-        accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
-        gyroscope = sensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE);
-        sensorManager.registerListener(this, gyroscope, SensorManager.SENSOR_DELAY_NORMAL);
-        sensorManager.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_NORMAL);
-        acceleration = (TextView) getView().findViewById(R.id.acceleration);
     }
 
     @Override
@@ -287,10 +280,18 @@ public class VideoFragment extends Fragment
     }
 
     @Override
-    public void onAccuracyChanged(Sensor sensor, int accuracy){
+    public void onAccuracyChanged(Sensor sensor, int accuracy) {
 
     }
 
+    private void initSensor() {
+        sensorManager = (SensorManager)mActivity.getSystemService(mActivity.SENSOR_SERVICE);
+        accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
+        gyroscope = sensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE);
+        sensorManager.registerListener(this, gyroscope, SensorManager.SENSOR_DELAY_NORMAL);
+        sensorManager.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_NORMAL);
+        acceleration = (TextView) getView().findViewById(R.id.acceleration);
+    }
 
     private float[] accelData = {0,0,0};
     private float[] gyroData = {0,0,0};
@@ -316,6 +317,7 @@ public class VideoFragment extends Fragment
     @Override
     public void onResume() {
         super.onResume();
+        initSensor();
         startBackgroundThread();
         if (mTextureView.isAvailable()) {
             openCamera(mTextureView.getWidth(), mTextureView.getHeight());
@@ -329,6 +331,7 @@ public class VideoFragment extends Fragment
         closeCamera();
         stopBackgroundThread();
         super.onPause();
+        sensorManager.unregisterListener(this);
     }
 
     @Override
