@@ -220,7 +220,7 @@ public class VideoFragment extends Fragment
      */
     private static Size chooseVideoSize(Size[] choices) {
         for (Size size : choices) {
-            if (size.getWidth() == size.getHeight() * 4 / 3 && size.getWidth() <= 1080) {
+            if (size.getWidth() == size.getHeight() * 6 / 4 && size.getWidth() <= 1080) {
                 return size;
             }
         }
@@ -246,7 +246,7 @@ public class VideoFragment extends Fragment
         int h = aspectRatio.getHeight();
         for (Size option : choices) {
             if (option.getHeight() == option.getWidth() * h / w &&
-                    option.getWidth() >= width && option.getHeight() >= height) {
+                    option.getWidth() <= width && option.getHeight() <= height) {
                 bigEnough.add(option);
             }
         }
