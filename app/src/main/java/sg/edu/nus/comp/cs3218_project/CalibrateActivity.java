@@ -12,7 +12,7 @@ public class CalibrateActivity extends Activity {
         if (savedInstanceState == null) {
             getFragmentManager()
                     .beginTransaction()
-                    .replace(R.id.container, VideoFragment.newInstance())
+                    .replace(R.id.container, CalibrateFragment.newInstance())
                     .commit();
         }
     }

@@ -25,6 +25,8 @@ import android.hardware.camera2.CameraManager;
 import android.hardware.camera2.CameraMetadata;
 import android.hardware.camera2.CaptureRequest;
 import android.hardware.camera2.params.StreamConfigurationMap;
+import android.media.MediaExtractor;
+import android.media.MediaFormat;
 import android.media.MediaRecorder;
 import android.os.Bundle;
 import android.os.Handler;
@@ -46,7 +48,9 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import java.io.File;
+import java.io.FileWriter;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -312,7 +316,7 @@ public class CalibrateFragment extends Fragment
         );
 
 
-        Log.d("Accelerometer", "" + event.timestamp);
+        //Log.d("Accelerometer", "" + event.timestamp);
     }
 
     @Override
@@ -566,7 +570,7 @@ public class CalibrateFragment extends Fragment
         public void onCaptureStarted(CameraCaptureSession session, CaptureRequest request, long timestamp, long frameNumber) {
             super.onCaptureStarted(session, request, timestamp, frameNumber);
             if (mIsRecordingVideo) {
-                Log.d("OnCaptureStarted", System.currentTimeMillis() + " " + timestamp);
+                //Log.d("OnCaptureStarted", System.currentTimeMillis() + " " + timestamp);
             }
         }
     };
@@ -627,7 +631,7 @@ public class CalibrateFragment extends Fragment
     }
 
     private File getVideoFile(Context context) {
-        return new File(context.getExternalFilesDir(null), "video.mp4");
+        return new File(context.getExternalFilesDir(null), "calibrate.mp4");
     }
 
     private void startRecordingVideo() {
@@ -663,6 +667,40 @@ public class CalibrateFragment extends Fragment
             Toast.makeText(activity, "Video saved: " + getVideoFile(activity),
                     Toast.LENGTH_SHORT).show();
         }
+
+        MediaExtractor extractor = new MediaExtractor();
+        try{
+            extractor.setDataSource(getVideoFile(activity).getAbsolutePath());
+            int numTracks = extractor.getTrackCount();
+            for (int i = 0; i < numTracks; ++i) {
+                MediaFormat format = extractor.getTrackFormat(i);
+                String mime = format.getString(MediaFormat.KEY_MIME);
+                if (mime.equals("audio/mp4a-latm")) {
+                    extractor.selectTrack(i);
+                }
+                Log.d("MIME", mime);
+            }
+            ByteBuffer inputBuffer = ByteBuffer.allocate(2048);
+            ArrayList <Integer> data = new ArrayList<Integer>();
+            while (extractor.readSampleData(inputBuffer, 0) >= 0) {
+                int trackIndex = extractor.getSampleTrackIndex();
+                long presentationTimeUs = extractor.getSampleTime();
+
+                data.add(extractor.readSampleData(inputBuffer, 0));
+
+                extractor.advance();
+            }
+
+            for (Integer i: data){
+                Log.d("Data: ", i.toString());
+            }
+
+            extractor.release();
+            extractor = null;
+        } catch (Exception e){
+
+        }
+
         startPreview();
     }
 
