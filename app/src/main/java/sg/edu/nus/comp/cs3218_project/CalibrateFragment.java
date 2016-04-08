@@ -25,6 +25,7 @@ import android.hardware.camera2.CameraManager;
 import android.hardware.camera2.CameraMetadata;
 import android.hardware.camera2.CaptureRequest;
 import android.hardware.camera2.params.StreamConfigurationMap;
+import android.media.AudioRecord;
 import android.media.MediaExtractor;
 import android.media.MediaFormat;
 import android.media.MediaRecorder;
@@ -251,7 +252,7 @@ public class CalibrateFragment extends Fragment
         int h = aspectRatio.getHeight();
         for (Size option : choices) {
             if (option.getHeight() == option.getWidth() * h / w &&
-                    option.getWidth() <= width && option.getHeight() <= height) {
+                    option.getWidth() >= width && option.getHeight() >= height) {
                 bigEnough.add(option);
             }
         }
@@ -329,6 +330,12 @@ public class CalibrateFragment extends Fragment
         } else {
             mTextureView.setSurfaceTextureListener(mSurfaceTextureListener);
         }
+
+        if (audioRecord != null) {
+            audioRecord.stop();
+            audioRecord.release();
+        }
+        audioRecord = new AudioRecord(1, FS, nChannels, audioEncoding, AudioRecord.getMinBufferSize(FS, nChannels, audioEncoding));
     }
 
     @Override
@@ -641,8 +648,9 @@ public class CalibrateFragment extends Fragment
             mIsRecordingVideo = true;
 
             // Start recording
-            mMediaRecorder.start();
-        } catch (IllegalStateException e) {
+            //mMediaRecorder.start();
+            startRecordingThread();
+        } catch (Exception e) {
             e.printStackTrace();
         }
     }
@@ -660,7 +668,7 @@ public class CalibrateFragment extends Fragment
         }
 
         // Stop recording
-        mMediaRecorder.stop();
+        //mMediaRecorder.stop();
         mMediaRecorder.reset();
         Activity activity = getActivity();
         if (null != activity) {
@@ -668,39 +676,11 @@ public class CalibrateFragment extends Fragment
                     Toast.LENGTH_SHORT).show();
         }
 
-        MediaExtractor extractor = new MediaExtractor();
-        try{
-            extractor.setDataSource(getVideoFile(activity).getAbsolutePath());
-            int numTracks = extractor.getTrackCount();
-            for (int i = 0; i < numTracks; ++i) {
-                MediaFormat format = extractor.getTrackFormat(i);
-                String mime = format.getString(MediaFormat.KEY_MIME);
-                if (mime.equals("audio/mp4a-latm")) {
-                    extractor.selectTrack(i);
-                }
-                Log.d("MIME", mime);
-            }
-            ByteBuffer inputBuffer = ByteBuffer.allocate(2048);
-            ArrayList <Integer> data = new ArrayList<Integer>();
-            while (extractor.readSampleData(inputBuffer, 0) >= 0) {
-                int trackIndex = extractor.getSampleTrackIndex();
-                long presentationTimeUs = extractor.getSampleTime();
-
-                data.add(extractor.readSampleData(inputBuffer, 0));
-
-                extractor.advance();
-            }
-
-            for (Integer i: data){
-                Log.d("Data: ", i.toString());
-            }
-
-            extractor.release();
-            extractor = null;
-        } catch (Exception e){
-
+        try {
+            stopRecordingThread();
+        } catch (Exception e) {
+            e.printStackTrace();
         }
-
         startPreview();
     }
 
@@ -765,6 +745,70 @@ public class CalibrateFragment extends Fragment
                             })
                     .create();
         }
+    }
+
+
+    private static final int  FS = 16000;     // sampling frequency
+    public AudioRecord audioRecord;
+    public Boolean            recording = Boolean.valueOf(true);
+    private int               audioEncoding = 2;
+    private int               nChannels = 16;
+    private Thread            recordingThread;
+    private static short[]    buffer;
+    private static int        bufferSize;
+    ArrayList<Short>        soundData = new ArrayList<Short>();
+
+    public void startRecordingThread() throws Exception
+    {
+        try {
+            if (audioRecord != null) {
+                audioRecord.stop();
+                audioRecord.release();
+            }
+            audioRecord = new AudioRecord(1, FS, nChannels, audioEncoding, AudioRecord.getMinBufferSize(FS, nChannels, audioEncoding));
+        }
+        catch (Exception e) {
+            Log.d("Error in Init() ", e.getMessage());
+        }
+
+        bufferSize = AudioRecord.getMinBufferSize(FS, nChannels, audioEncoding);
+        buffer = new short[bufferSize];
+
+        audioRecord.startRecording();
+        Log.d("AudioRecordStart", "" + System.nanoTime());
+        recordingThread = new Thread()
+        {
+            public void run()
+            {
+                while (recording)
+                {
+
+                    audioRecord.read(buffer, 0, bufferSize);
+                    for (short buf  : buffer) {
+                        soundData.add(buf);
+                    }
+                }
+            }
+        };
+        recordingThread.start();
+
+        return;
+    }
+
+    public void stopRecordingThread() throws InterruptedException {
+        recording = Boolean.valueOf(false);
+        if (audioRecord != null) {
+            audioRecord.stop();
+            audioRecord.release();
+        }
+        if (recordingThread != null) {
+            recordingThread.join();
+        }
+        //for (Short s : soundData) {
+        //    Log.d("AudioData: ", s.toString());
+        //}
+        Log.d("AudioRecordEnd", "" + System.nanoTime());
+        Log.d("AudioRecordLength", "" + soundData.size());
     }
 
 }
