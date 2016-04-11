@@ -252,7 +252,7 @@ public class CalibrateFragment extends Fragment
         int h = aspectRatio.getHeight();
         for (Size option : choices) {
             if (option.getHeight() == option.getWidth() * h / w &&
-                    option.getWidth() >= width && option.getHeight() >= height) {
+                    option.getWidth() <= width && option.getHeight() <= height) {
                 bigEnough.add(option);
             }
         }
@@ -299,15 +299,40 @@ public class CalibrateFragment extends Fragment
         acceleration = (TextView) getView().findViewById(R.id.acceleration);
     }
 
-    private float[] accelData = {0,0,0};
-    private float[] gyroData = {0,0,0};
+    private Float[] accelData = {0f, 0f, 0f};
+    private Float[] gyroData = {0f, 0f, 0f};
+    private ArrayList<Float[]> accelDataList = new ArrayList<Float[]>();
+    private ArrayList<Float[]> gyroDataList = new ArrayList<Float[]>();
     @Override
     public void onSensorChanged (SensorEvent event){
+        Float[] temp = {0f, 0f, 0f};
+
         if (event.sensor.getType() == Sensor.TYPE_ACCELEROMETER) {
-            accelData = event.values;
+            accelData[0] = event.values[0];
+            accelData[1] = event.values[1];
+            accelData[2] = event.values[2];
+
+            if (mIsRecordingVideo) {
+                temp[0] = event.values[0];
+                temp[1] = event.values[1];
+                temp[2] = event.values[2];
+
+                accelDataList.add(temp);
+            }
         } else {
-            gyroData = event.values;
+            gyroData[0] = event.values[0];
+            gyroData[1] = event.values[1];
+            gyroData[2] = event.values[2];
+
+            if (mIsRecordingVideo) {
+                temp[0] = event.values[0];
+                temp[1] = event.values[1];
+                temp[2] = event.values[2];
+
+                gyroDataList.add(temp);
+            }
         }
+
         acceleration.setText("X: " + accelData[0] +
                         "\nY: " + accelData[1] +
                         "\nZ: " + accelData[2] +
@@ -316,9 +341,31 @@ public class CalibrateFragment extends Fragment
                         "\ngZ: " + gyroData[2]
         );
 
-
         //Log.d("Accelerometer", "" + event.timestamp);
+        //Log.d("AccelDataList", "" + accelDataList.toString());
+        //Log.d("GyroDataList", "" + gyroDataList.toString());
     }
+
+    /*private Float[] firstAccelData = {0f, 0f, 0f};
+    private Float[] firstGyroData = {0f, 0f, 0f};
+
+    public void getFirstNonZeroData(){
+        for(Float[] k : accelDataList){
+            double mag = Math.sqrt(k[0] * k[0] + k[1] * k[1] + k[2] * k[2]);
+            if (mag > 0.1) {
+                firstAccelData = k;
+                break;
+            }
+        }
+
+        for(Float[] k : gyroDataList){
+            double mag = Math.sqrt(k[0] * k[0] + k[1] * k[1] + k[2] * k[2]);
+            if (mag > 10) {
+                firstGyroData = k;
+                break;
+            }
+        }
+    }*/
 
     @Override
     public void onResume() {
@@ -750,7 +797,6 @@ public class CalibrateFragment extends Fragment
 
     private static final int  FS = 16000;     // sampling frequency
     public AudioRecord audioRecord;
-    public Boolean            recording = Boolean.valueOf(true);
     private int               audioEncoding = 2;
     private int               nChannels = 16;
     private Thread            recordingThread;
@@ -780,7 +826,7 @@ public class CalibrateFragment extends Fragment
         {
             public void run()
             {
-                while (recording)
+                while (mIsRecordingVideo)
                 {
 
                     audioRecord.read(buffer, 0, bufferSize);
@@ -796,7 +842,6 @@ public class CalibrateFragment extends Fragment
     }
 
     public void stopRecordingThread() throws InterruptedException {
-        recording = Boolean.valueOf(false);
         if (audioRecord != null) {
             audioRecord.stop();
             audioRecord.release();
