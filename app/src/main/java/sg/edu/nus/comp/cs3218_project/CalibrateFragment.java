@@ -308,7 +308,7 @@ public class CalibrateFragment extends Fragment
         int h = aspectRatio.getHeight();
         for (Size option : choices) {
             if (option.getHeight() == option.getWidth() * h / w &&
-                    option.getWidth() <= width && option.getHeight() <= height) {
+                    option.getWidth() >= width && option.getHeight() >= height) {
                 bigEnough.add(option);
             }
         }
@@ -732,7 +732,6 @@ public class CalibrateFragment extends Fragment
     }
 
     public void startRecordingThread() throws Exception {
-
         try {
             if (audioRecord != null) {
                 audioRecord.stop();
@@ -761,6 +760,7 @@ public class CalibrateFragment extends Fragment
     }
 
     public void stopRecordingThread() throws InterruptedException {
+        recording = Boolean.valueOf(false);
         if (audioRecord != null) {
             audioRecord.stop();
             audioRecord.release();
