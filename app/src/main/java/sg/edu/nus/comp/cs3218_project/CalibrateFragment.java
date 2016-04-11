@@ -26,13 +26,10 @@ import android.hardware.camera2.CameraMetadata;
 import android.hardware.camera2.CaptureRequest;
 import android.hardware.camera2.params.StreamConfigurationMap;
 import android.media.AudioRecord;
-import android.media.MediaExtractor;
-import android.media.MediaFormat;
 import android.media.MediaRecorder;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.HandlerThread;
-import android.os.Vibrator;
 import android.support.annotation.NonNull;
 import android.support.v13.app.FragmentCompat;
 import android.support.v4.app.ActivityCompat;
@@ -49,9 +46,7 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import java.io.File;
-import java.io.FileWriter;
 import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -71,9 +66,26 @@ public class CalibrateFragment extends Fragment
     private Sensor accelerometer;
     private Sensor gyroscope;
     private SensorManager sensorManager;
-    private TextView acceleration;
+    private TextView sensorText;
     private Activity mActivity;
+    private SensorLogger sensorLogger;
+    private float[] accelData = {0, 0, 0};
+    private float[] gyroData = {0, 0, 0};
 
+    private static final int  FS = 44100;     // sampling frequency
+    public AudioRecord audioRecord;
+    public Boolean            recording = Boolean.valueOf(true);
+    private int               audioEncoding = 2;
+    private int               nChannels = 16;
+    private Thread            recordingThread;
+    private static short[]    buffer;
+    private static int        bufferSize;
+
+    private CaptureRequest.Builder mPreviewBuilder;
+    private MediaRecorder mMediaRecorder;
+    private boolean mIsRecordingVideo;
+    private HandlerThread mBackgroundThread;
+    private Handler mBackgroundHandler;
 
     private static final String[] VIDEO_PERMISSIONS = {
             Manifest.permission.CAMERA,
@@ -92,38 +104,27 @@ public class CalibrateFragment extends Fragment
      */
     private AutoFitTextureView mTextureView;
 
-    /**
-     * Button to record video
-     */
+    /** Button to record video */
     private Button mButtonVideo;
 
-    /**
-     * A refernce to the opened {@link CameraDevice}.
-     */
+    /** A refernce to the opened {@link CameraDevice}. */
     private CameraDevice mCameraDevice;
 
-    /**
-     * A reference to the current {@link CameraCaptureSession} for
-     * preview.
-     */
+    /** A reference to the current {@link CameraCaptureSession} for preview. */
     private CameraCaptureSession mPreviewSession;
 
     /**
      * {@link TextureView.SurfaceTextureListener} handles several lifecycle events on a
      * {@link TextureView}.
      */
-    private TextureView.SurfaceTextureListener mSurfaceTextureListener
-            = new TextureView.SurfaceTextureListener() {
-
+    private TextureView.SurfaceTextureListener mSurfaceTextureListener = new TextureView.SurfaceTextureListener() {
         @Override
-        public void onSurfaceTextureAvailable(SurfaceTexture surfaceTexture,
-                                              int width, int height) {
+        public void onSurfaceTextureAvailable(SurfaceTexture surfaceTexture, int width, int height) {
             openCamera(width, height);
         }
 
         @Override
-        public void onSurfaceTextureSizeChanged(SurfaceTexture surfaceTexture,
-                                                int width, int height) {
+        public void onSurfaceTextureSizeChanged(SurfaceTexture surfaceTexture, int width, int height) {
             configureTransform(width, height);
         }
 
@@ -133,142 +134,23 @@ public class CalibrateFragment extends Fragment
         }
 
         @Override
-        public void onSurfaceTextureUpdated(SurfaceTexture surfaceTexture) {
-        }
-
+        public void onSurfaceTextureUpdated(SurfaceTexture surfaceTexture) {}
     };
 
-    /**
-     * The {@link Size} of camera preview.
-     */
+    /** The {@link Size} of camera preview. */
     private Size mPreviewSize;
 
-    /**
-     * The {@link Size} of video recording.
-     */
+    /** The {@link Size} of video recording. */
     private Size mVideoSize;
-
-    /**
-     * Camera preview.
-     */
-    private CaptureRequest.Builder mPreviewBuilder;
-
-    /**
-     * MediaRecorder
-     */
-    private MediaRecorder mMediaRecorder;
-
-    /**
-     * Whether the app is recording video now
-     */
-    private boolean mIsRecordingVideo;
-
-    /**
-     * An additional thread for running tasks that shouldn't block the UI.
-     */
-    private HandlerThread mBackgroundThread;
-
-    /**
-     * A {@link Handler} for running tasks in the background.
-     */
-    private Handler mBackgroundHandler;
 
     /**
      * A {@link Semaphore} to prevent the app from exiting before closing the camera.
      */
     private Semaphore mCameraOpenCloseLock = new Semaphore(1);
 
-    /**
-     * {@link CameraDevice.StateCallback} is called when {@link CameraDevice} changes its status.
-     */
-    private CameraDevice.StateCallback mStateCallback = new CameraDevice.StateCallback() {
-
-        @Override
-        public void onOpened(CameraDevice cameraDevice) {
-            mCameraDevice = cameraDevice;
-            startPreview();
-            mCameraOpenCloseLock.release();
-            if (null != mTextureView) {
-                configureTransform(mTextureView.getWidth(), mTextureView.getHeight());
-            }
-        }
-
-        @Override
-        public void onDisconnected(CameraDevice cameraDevice) {
-            mCameraOpenCloseLock.release();
-            cameraDevice.close();
-            mCameraDevice = null;
-        }
-
-        @Override
-        public void onError(CameraDevice cameraDevice, int error) {
-            mCameraOpenCloseLock.release();
-            cameraDevice.close();
-            mCameraDevice = null;
-            Activity activity = getActivity();
-            if (null != activity) {
-                activity.finish();
-            }
-        }
-
-    };
-
-    public static CalibrateFragment newInstance() {
-        return new CalibrateFragment();
-    }
-
-    /**
-     * In this sample, we choose a video size with 3x4 aspect ratio. Also, we don't use sizes
-     * larger than 1080p, since MediaRecorder cannot handle such a high-resolution video.
-     *
-     * @param choices The list of available sizes
-     * @return The video size
-     */
-    private static Size chooseVideoSize(Size[] choices) {
-        for (Size size : choices) {
-            if (size.getWidth() == size.getHeight() * 6 / 4 && size.getWidth() <= 1080) {
-                return size;
-            }
-        }
-        Log.e(TAG, "Couldn't find any suitable video size");
-        return choices[choices.length - 1];
-    }
-
-    /**
-     * Given {@code choices} of {@code Size}s supported by a camera, chooses the smallest one whose
-     * width and height are at least as large as the respective requested values, and whose aspect
-     * ratio matches with the specified value.
-     *
-     * @param choices     The list of sizes that the camera supports for the intended output class
-     * @param width       The minimum desired width
-     * @param height      The minimum desired height
-     * @param aspectRatio The aspect ratio
-     * @return The optimal {@code Size}, or an arbitrary one if none were big enough
-     */
-    private static Size chooseOptimalSize(Size[] choices, int width, int height, Size aspectRatio) {
-        // Collect the supported resolutions that are at least as big as the preview Surface
-        List<Size> bigEnough = new ArrayList<Size>();
-        int w = aspectRatio.getWidth();
-        int h = aspectRatio.getHeight();
-        for (Size option : choices) {
-            if (option.getHeight() == option.getWidth() * h / w &&
-                    option.getWidth() >= width && option.getHeight() >= height) {
-                bigEnough.add(option);
-            }
-        }
-
-        // Pick the smallest of those, assuming we found any
-        if (bigEnough.size() > 0) {
-            return Collections.min(bigEnough, new CompareSizesByArea());
-        } else {
-            Log.e(TAG, "Couldn't find any suitable preview size");
-            return choices[0];
-        }
-    }
 
     @Override
-    public View onCreateView(LayoutInflater inflater, ViewGroup container,
-                             Bundle savedInstanceState) {
+    public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
         return inflater.inflate(R.layout.fragment_video, container, false);
     }
 
@@ -286,38 +168,29 @@ public class CalibrateFragment extends Fragment
     }
 
     @Override
-    public void onAccuracyChanged(Sensor sensor, int accuracy){
+    public void onAccuracyChanged(Sensor sensor, int accuracy){}
 
-    }
-
-    private void initSensor() {
-        sensorManager = (SensorManager)mActivity.getSystemService(mActivity.SENSOR_SERVICE);
-        accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
-        gyroscope = sensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE);
-        sensorManager.registerListener(this, gyroscope, SensorManager.SENSOR_DELAY_NORMAL);
-        sensorManager.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_NORMAL);
-        acceleration = (TextView) getView().findViewById(R.id.acceleration);
-    }
-
-    private float[] accelData = {0,0,0};
-    private float[] gyroData = {0,0,0};
     @Override
     public void onSensorChanged (SensorEvent event){
         if (event.sensor.getType() == Sensor.TYPE_ACCELEROMETER) {
             accelData = event.values;
+            if (mIsRecordingVideo) {
+                sensorLogger.addAccelSignals(event.timestamp, accelData);
+            }
         } else {
             gyroData = event.values;
+            if (mIsRecordingVideo) {
+                sensorLogger.addGyroSignals(event.timestamp, gyroData);
+            }
         }
-        acceleration.setText("X: " + accelData[0] +
+
+        sensorText.setText("X: " + accelData[0] +
                         "\nY: " + accelData[1] +
                         "\nZ: " + accelData[2] +
                         "\ngX: " + gyroData[0] +
                         "\ngY: " + gyroData[1] +
                         "\ngZ: " + gyroData[2]
         );
-
-
-        //Log.d("Accelerometer", "" + event.timestamp);
     }
 
     @Override
@@ -360,6 +233,111 @@ public class CalibrateFragment extends Fragment
         }
     }
 
+
+
+
+    /**
+     * {@link CameraDevice.StateCallback} is called when {@link CameraDevice} changes its status.
+     */
+    private CameraDevice.StateCallback mStateCallback = new CameraDevice.StateCallback() {
+
+        @Override
+        public void onOpened(CameraDevice cameraDevice) {
+            mCameraDevice = cameraDevice;
+            startPreview();
+            mCameraOpenCloseLock.release();
+            if (null != mTextureView) {
+                configureTransform(mTextureView.getWidth(), mTextureView.getHeight());
+            }
+        }
+
+        @Override
+        public void onDisconnected(CameraDevice cameraDevice) {
+            mCameraOpenCloseLock.release();
+            cameraDevice.close();
+            mCameraDevice = null;
+        }
+
+        @Override
+        public void onError(CameraDevice cameraDevice, int error) {
+            mCameraOpenCloseLock.release();
+            cameraDevice.close();
+            mCameraDevice = null;
+            Activity activity = getActivity();
+            if (null != activity) {
+                activity.finish();
+            }
+        }
+
+    };
+
+    public static CalibrateFragment newInstance() {
+        return new CalibrateFragment();
+    }
+
+    /**
+     * @param choices The list of available sizes
+     * @return The video size
+     */
+    private static Size chooseVideoSize(Size[] choices) {
+        for (Size size : choices) {
+            if (size.getWidth() == size.getHeight() * 6 / 4 && size.getWidth() <= 1080) {
+                return size;
+            }
+        }
+        Log.e(TAG, "Couldn't find any suitable video size");
+        return choices[choices.length - 1];
+    }
+
+
+    /**
+     * Given {@code choices} of {@code Size}s supported by a camera, chooses the smallest one whose
+     * width and height are at least as large as the respective requested values, and whose aspect
+     * ratio matches with the specified value.
+     *
+     * @param choices     The list of sizes that the camera supports for the intended output class
+     * @param width       The minimum desired width
+     * @param height      The minimum desired height
+     * @param aspectRatio The aspect ratio
+     * @return The optimal {@code Size}, or an arbitrary one if none were big enough
+     */
+    private static Size chooseOptimalSize(Size[] choices, int width, int height, Size aspectRatio) {
+        // Collect the supported resolutions that are at least as big as the preview Surface
+        List<Size> bigEnough = new ArrayList<Size>();
+        int w = aspectRatio.getWidth();
+        int h = aspectRatio.getHeight();
+        for (Size option : choices) {
+            if (option.getHeight() == option.getWidth() * h / w &&
+                    option.getWidth() >= width && option.getHeight() >= height) {
+                bigEnough.add(option);
+            }
+        }
+
+        // Pick the smallest of those, assuming we found any
+        if (bigEnough.size() > 0) {
+            return Collections.min(bigEnough, new CompareSizesByArea());
+        } else {
+            Log.e(TAG, "Couldn't find any suitable preview size");
+            return choices[0];
+        }
+    }
+
+
+
+    /**
+     * Initialises sensors
+     */
+    private void initSensor() {
+        sensorManager = (SensorManager)mActivity.getSystemService(mActivity.SENSOR_SERVICE);
+        accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
+        gyroscope = sensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE);
+        sensorManager.registerListener(this, gyroscope, SensorManager.SENSOR_DELAY_GAME);
+        sensorManager.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_GAME);
+        sensorText = (TextView) getView().findViewById(R.id.acceleration);
+    }
+
+
+
     /**
      * Starts a background thread and its {@link Handler}.
      */
@@ -382,6 +360,10 @@ public class CalibrateFragment extends Fragment
             e.printStackTrace();
         }
     }
+
+
+
+
 
     /**
      * Gets whether you should show UI with rationale for requesting permissions.
@@ -410,8 +392,7 @@ public class CalibrateFragment extends Fragment
     }
 
     @Override
-    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions,
-                                           @NonNull int[] grantResults) {
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
         Log.d(TAG, "onRequestPermissionsResult");
         if (requestCode == REQUEST_VIDEO_PERMISSIONS) {
             if (grantResults.length == VIDEO_PERMISSIONS.length) {
@@ -628,6 +609,7 @@ public class CalibrateFragment extends Fragment
         mMediaRecorder.setOutputFile(getVideoFile(activity).getAbsolutePath());
         mMediaRecorder.setVideoEncodingBitRate(10000000);
         mMediaRecorder.setVideoFrameRate(30);
+        mMediaRecorder.setAudioSamplingRate(44100);
         mMediaRecorder.setVideoSize(mVideoSize.getWidth(), mVideoSize.getHeight());
         mMediaRecorder.setVideoEncoder(MediaRecorder.VideoEncoder.H264);
         mMediaRecorder.setAudioEncoder(MediaRecorder.AudioEncoder.AAC);
@@ -635,6 +617,8 @@ public class CalibrateFragment extends Fragment
         int orientation = ORIENTATIONS.get(rotation);
         mMediaRecorder.setOrientationHint(orientation);
         mMediaRecorder.prepare();
+
+
     }
 
     private File getVideoFile(Context context) {
@@ -670,16 +654,16 @@ public class CalibrateFragment extends Fragment
         // Stop recording
         //mMediaRecorder.stop();
         mMediaRecorder.reset();
-        Activity activity = getActivity();
-        if (null != activity) {
-            Toast.makeText(activity, "Video saved: " + getVideoFile(activity),
-                    Toast.LENGTH_SHORT).show();
-        }
-
         try {
             stopRecordingThread();
         } catch (Exception e) {
             e.printStackTrace();
+        }
+
+        Activity activity = getActivity();
+        if (null != activity) {
+            Toast.makeText(activity, "Video saved: " + getVideoFile(activity),
+                    Toast.LENGTH_SHORT).show();
         }
         startPreview();
     }
@@ -747,19 +731,7 @@ public class CalibrateFragment extends Fragment
         }
     }
 
-
-    private static final int  FS = 16000;     // sampling frequency
-    public AudioRecord audioRecord;
-    public Boolean            recording = Boolean.valueOf(true);
-    private int               audioEncoding = 2;
-    private int               nChannels = 16;
-    private Thread            recordingThread;
-    private static short[]    buffer;
-    private static int        bufferSize;
-    ArrayList<Short>        soundData = new ArrayList<Short>();
-
-    public void startRecordingThread() throws Exception
-    {
+    public void startRecordingThread() throws Exception {
         try {
             if (audioRecord != null) {
                 audioRecord.stop();
@@ -773,26 +745,18 @@ public class CalibrateFragment extends Fragment
 
         bufferSize = AudioRecord.getMinBufferSize(FS, nChannels, audioEncoding);
         buffer = new short[bufferSize];
-
+        sensorLogger = new SensorLogger();
         audioRecord.startRecording();
-        Log.d("AudioRecordStart", "" + System.nanoTime());
-        recordingThread = new Thread()
-        {
-            public void run()
-            {
-                while (recording)
-                {
-
+        sensorLogger.setInitialAudioTimeFrame(System.nanoTime());
+        recordingThread = new Thread() {
+            public void run() {
+                while (recording) {
                     audioRecord.read(buffer, 0, bufferSize);
-                    for (short buf  : buffer) {
-                        soundData.add(buf);
-                    }
+                    sensorLogger.addAudioSignals(buffer);
                 }
             }
         };
         recordingThread.start();
-
-        return;
     }
 
     public void stopRecordingThread() throws InterruptedException {
@@ -800,15 +764,13 @@ public class CalibrateFragment extends Fragment
         if (audioRecord != null) {
             audioRecord.stop();
             audioRecord.release();
+            sensorLogger.setFinalAudioTimeFrame(System.nanoTime());
         }
         if (recordingThread != null) {
             recordingThread.join();
         }
-        //for (Short s : soundData) {
-        //    Log.d("AudioData: ", s.toString());
-        //}
-        Log.d("AudioRecordEnd", "" + System.nanoTime());
-        Log.d("AudioRecordLength", "" + soundData.size());
+        sensorLogger.test();
+        //sensorLogger.calibrateAccelerometer();
+        //sensorLogger.calibrateGyroscope();
     }
-
 }
