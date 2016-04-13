@@ -11,18 +11,24 @@ import android.media.MediaExtractor;
 import android.media.MediaFormat;
 import android.media.MediaMetadataRetriever;
 import android.media.MediaMuxer;
+import android.provider.MediaStore;
 import android.support.v4.content.res.TypedArrayUtils;
 import android.util.Log;
 import android.util.Pair;
 
+import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
+import java.io.FileReader;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.lang.reflect.Array;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.Comparator;
 
 /**
  * Created by lewishn on 4/10/2016.
@@ -83,38 +89,68 @@ public class SensorLogger {
 
 
 
-    public void test() {
-        /*
-        Log.d("SensorLogger:", "Audio Timestamp: " + audioStart + "-" + audioEnd);
-        Log.d("SensorLogger:", "Audio Length: " + (audioEnd - audioStart));
-        Log.d("SensorLogger:", "Audio Data Length: " + audioData.size());
-        Log.d("SensorLogger:", "Gyro Timestamp: " + gyroData.get(0).first + "-" + gyroData.get(gyroData.size() - 1).first);
-        Log.d("SensorLogger:", "Gyro Length: " +  (gyroData.get(gyroData.size() - 1).first - gyroData.get(0).first));
-        Log.d("SensorLogger:", "Gyro Data Length: " + gyroData.size());
-        Log.d("SensorLogger:", "Accel TimeStamp:" + accelData.get(0).first + "-" + accelData.get(accelData.size() - 1).first);
-        Log.d("SensorLogger:", "Accel Length: " +  (accelData.get(accelData.size() - 1).first - accelData.get(0).first));
-        Log.d("SensorLogger:", "Accel Data Length: " + accelData.size());
-        */
-
+    public void calibrate() {
         // For acc and gyro, timestamp is in nanoseconds
         long acc = calibrateAccelerometer();
         long gyro = calibrateGyroscope(acc);
-
-        // F
         long vid = calibrateVideo(Math.min(acc, gyro), Math.max(acc, gyro));
 
-        /*
-        String s = "";
-        for (Pair p: accumulated) {
-            Log.d("SensorLogger: accumulated:", p.first + "," + p.second);
+        String t = (acc - vid) + "," + (acc - gyro);
+        try {
+            File f = new File(activity.getExternalFilesDir(null), "calibrate.csv");
+            FileWriter writer = new FileWriter(f, true);
+            writer.write(t);
+            writer.flush();
+            writer.close();
+        }catch (IOException e) {
+            Log.e("Error CSV", e.getMessage());
         }
-        */
 
-        //Log.d("SensorLogger: Sound - Accel:", "" + (aud - acc));
-        //Log.d("SensorLogger: Sound - Gyro:", "" + (aud - gyro));
         Log.d("SensorLogger: Accel:", "" + acc);
         Log.d("SensorLogger: Gyro:", "" + gyro);
         Log.d("SensorLogger: Video:", "" + vid);
+    }
+
+    public void extractBestFrame() {
+        long t = pickBest() / 1000;
+        ArrayList<Long> accVidCalib = new ArrayList<>();
+
+        try {
+            File f = new File(activity.getExternalFilesDir(null), "calibrate.csv");
+            BufferedReader reader = new BufferedReader(new FileReader(f));
+            String line = "";
+            while ((line = reader.readLine()) != null) {
+                String[] data = line.split(",");
+                accVidCalib.add(Long.parseLong(data[0]));
+            }
+        } catch (IOException e) {
+            Log.e("Error CSV", e.getMessage());
+            return;
+        }
+
+        long sync = 0;
+        for (Long l : accVidCalib) {
+            sync += l;
+        }
+        sync = sync / accVidCalib.size();
+        sync = sync / 1000;
+
+        retriever = new MediaMetadataRetriever();
+        retriever.setDataSource(path);
+        try {
+            File f = new File(activity.getExternalFilesDir(null), "best-unsync.png");
+            FileOutputStream out = new FileOutputStream(f);
+            Bitmap bmp = retriever.getFrameAtTime(t, MediaMetadataRetriever.OPTION_CLOSEST);
+            bmp.compress(Bitmap.CompressFormat.PNG, 100, out);
+
+            File f2 = new File(activity.getExternalFilesDir(null), "best-sync.png");
+            out = new FileOutputStream(f2);
+            bmp = retriever.getFrameAtTime(t - sync, MediaMetadataRetriever.OPTION_CLOSEST);
+            bmp.compress(Bitmap.CompressFormat.PNG, 100, out);
+        } catch (FileNotFoundException e) {
+            e.printStackTrace();
+        }
+
     }
 
     public long calibrateVideo(long t1, long t2) {
@@ -272,5 +308,29 @@ public class SensorLogger {
     }
     public float z(ArrayList<Pair<Long, float[]>> pair, int index) {
         return pair.get(index).second[2];
+    }
+
+    public long pickBest() {
+        ArrayList<Pair<Long, float[]>> bestAccValues = new ArrayList<>();
+        for (int i = 0; i < accelData.size(); i++) {
+            double value = val(accelData.get(i).second);
+            if (value < 10.3 && value > 9.5) {
+                bestAccValues.add(accelData.get(i));
+            }
+        }
+
+        Collections.sort(bestAccValues, new Comparator<Pair<Long, float[]>>() {
+            @Override
+            public int compare(Pair<Long, float[]> lhs, Pair<Long, float[]> rhs) {
+                return (int) (val(lhs.second) - val(rhs.second));
+            }
+        });
+
+        return bestAccValues.get(0).first - accelData.get(0).first;
+    }
+
+
+    public double val(float[] v) {
+        return Math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
     }
 }

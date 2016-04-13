@@ -666,7 +666,7 @@ public class CalibrateFragment extends Fragment
         Activity activity = getActivity();
         sensorLogger.setVideoFile(getVideoFile(activity));
         sensorLogger.setActivity(activity);
-        sensorLogger.test();
+        sensorLogger.calibrate();
         /*
         try {
             stopRecordingThread();
@@ -782,7 +782,6 @@ public class CalibrateFragment extends Fragment
         if (recordingThread != null) {
             recordingThread.join();
         }
-        sensorLogger.test();
         //sensorLogger.calibrateAccelerometer();
         //sensorLogger.calibrateGyroscope();
     }

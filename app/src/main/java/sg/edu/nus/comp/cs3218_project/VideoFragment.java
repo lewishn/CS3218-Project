@@ -67,6 +67,7 @@ public class VideoFragment extends Fragment
     private SensorManager sensorManager;
     private TextView acceleration;
     private Activity mActivity;
+    private SensorLogger sensorLogger;
 
 
     private static final String[] VIDEO_PERMISSIONS = {
@@ -246,7 +247,7 @@ public class VideoFragment extends Fragment
         int h = aspectRatio.getHeight();
         for (Size option : choices) {
             if (option.getHeight() == option.getWidth() * h / w &&
-                    option.getWidth() <= width && option.getHeight() <= height) {
+                    option.getWidth() >= width && option.getHeight() >= height) {
                 bigEnough.add(option);
             }
         }
@@ -299,8 +300,14 @@ public class VideoFragment extends Fragment
     public void onSensorChanged (SensorEvent event){
         if (event.sensor.getType() == Sensor.TYPE_ACCELEROMETER) {
             accelData = event.values;
+            if (mIsRecordingVideo) {
+                sensorLogger.addAccelSignals(event.timestamp, accelData);
+            }
         } else {
             gyroData = event.values;
+            if (mIsRecordingVideo) {
+                sensorLogger.addGyroSignals(event.timestamp, gyroData);
+            }
         }
         acceleration.setText("X: " + accelData[0] +
                         "\nY: " + accelData[1] +
@@ -634,6 +641,7 @@ public class VideoFragment extends Fragment
             // UI
             mButtonVideo.setText(R.string.stop);
             mIsRecordingVideo = true;
+            sensorLogger = new SensorLogger();
 
             // Start recording
             mMediaRecorder.start();
@@ -658,6 +666,10 @@ public class VideoFragment extends Fragment
         mMediaRecorder.stop();
         mMediaRecorder.reset();
         Activity activity = getActivity();
+        sensorLogger.setVideoFile(getVideoFile(activity));
+        sensorLogger.setActivity(activity);
+        sensorLogger.extractBestFrame();
+
         if (null != activity) {
             Toast.makeText(activity, "Video saved: " + getVideoFile(activity),
                     Toast.LENGTH_SHORT).show();
