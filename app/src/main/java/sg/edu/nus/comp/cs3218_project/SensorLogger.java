@@ -99,7 +99,7 @@ public class SensorLogger {
         try {
             File f = new File(activity.getExternalFilesDir(null), "calibrate.csv");
             FileWriter writer = new FileWriter(f, true);
-            writer.write(t);
+            writer.write(t + System.lineSeparator());
             writer.flush();
             writer.close();
         }catch (IOException e) {
