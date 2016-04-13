@@ -24,6 +24,7 @@ import android.hardware.camera2.CameraDevice;
 import android.hardware.camera2.CameraManager;
 import android.hardware.camera2.CameraMetadata;
 import android.hardware.camera2.CaptureRequest;
+import android.hardware.camera2.TotalCaptureResult;
 import android.hardware.camera2.params.StreamConfigurationMap;
 import android.media.AudioRecord;
 import android.media.MediaRecorder;
@@ -561,6 +562,14 @@ public class CalibrateFragment extends Fragment
                 //Log.d("OnCaptureStarted", System.currentTimeMillis() + " " + timestamp);
             }
         }
+
+        @Override
+        public void onCaptureCompleted(CameraCaptureSession session, CaptureRequest request, TotalCaptureResult result) {
+            super.onCaptureCompleted(session, request, result);
+            if (mIsRecordingVideo) {
+
+            }
+        }
     };
 
     private void setUpCaptureRequestBuilder(CaptureRequest.Builder builder) {
@@ -609,7 +618,7 @@ public class CalibrateFragment extends Fragment
         mMediaRecorder.setOutputFile(getVideoFile(activity).getAbsolutePath());
         mMediaRecorder.setVideoEncodingBitRate(10000000);
         mMediaRecorder.setVideoFrameRate(30);
-        mMediaRecorder.setAudioSamplingRate(44100);
+        mMediaRecorder.setAudioSamplingRate(FS);
         mMediaRecorder.setVideoSize(mVideoSize.getWidth(), mVideoSize.getHeight());
         mMediaRecorder.setVideoEncoder(MediaRecorder.VideoEncoder.H264);
         mMediaRecorder.setAudioEncoder(MediaRecorder.AudioEncoder.AAC);
@@ -630,10 +639,10 @@ public class CalibrateFragment extends Fragment
             // UI
             mButtonVideo.setText(R.string.stop);
             mIsRecordingVideo = true;
-
+            sensorLogger = new SensorLogger();
             // Start recording
-            //mMediaRecorder.start();
-            startRecordingThread();
+            mMediaRecorder.start();
+            //startRecordingThread();
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -652,15 +661,19 @@ public class CalibrateFragment extends Fragment
         }
 
         // Stop recording
-        //mMediaRecorder.stop();
+        mMediaRecorder.stop();
         mMediaRecorder.reset();
+        Activity activity = getActivity();
+        sensorLogger.setVideoFile(getVideoFile(activity));
+        sensorLogger.setActivity(activity);
+        sensorLogger.test();
+        /*
         try {
             stopRecordingThread();
         } catch (Exception e) {
             e.printStackTrace();
-        }
+        }*/
 
-        Activity activity = getActivity();
         if (null != activity) {
             Toast.makeText(activity, "Video saved: " + getVideoFile(activity),
                     Toast.LENGTH_SHORT).show();
