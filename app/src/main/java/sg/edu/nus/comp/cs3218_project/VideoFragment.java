@@ -65,7 +65,7 @@ public class VideoFragment extends Fragment
     private Sensor accelerometer;
     private Sensor gyroscope;
     private SensorManager sensorManager;
-    private TextView acceleration;
+    private TextView textview;
     private Activity mActivity;
     private SensorLogger sensorLogger;
 
@@ -287,18 +287,18 @@ public class VideoFragment extends Fragment
 
     private void initSensor() {
         sensorManager = (SensorManager)mActivity.getSystemService(mActivity.SENSOR_SERVICE);
-        accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
+        accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION);
         gyroscope = sensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE);
-        sensorManager.registerListener(this, gyroscope, SensorManager.SENSOR_DELAY_NORMAL);
-        sensorManager.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_NORMAL);
-        acceleration = (TextView) getView().findViewById(R.id.acceleration);
+        sensorManager.registerListener(this, gyroscope, SensorManager.SENSOR_DELAY_GAME);
+        sensorManager.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_GAME);
+        textview = (TextView) getView().findViewById(R.id.acceleration);
     }
 
     private float[] accelData = {0,0,0};
     private float[] gyroData = {0,0,0};
     @Override
     public void onSensorChanged (SensorEvent event){
-        if (event.sensor.getType() == Sensor.TYPE_ACCELEROMETER) {
+        if (event.sensor.getType() == Sensor.TYPE_LINEAR_ACCELERATION) {
             accelData = event.values;
             if (mIsRecordingVideo) {
                 sensorLogger.addAccelSignals(event.timestamp, accelData);
@@ -309,16 +309,6 @@ public class VideoFragment extends Fragment
                 sensorLogger.addGyroSignals(event.timestamp, gyroData);
             }
         }
-        acceleration.setText("X: " + accelData[0] +
-                        "\nY: " + accelData[1] +
-                        "\nZ: " + accelData[2] +
-                        "\ngX: " + gyroData[0] +
-                        "\ngY: " + gyroData[1] +
-                        "\ngZ: " + gyroData[2]
-        );
-
-
-        Log.d("Accelerometer", "" + event.timestamp);
     }
     
     @Override
@@ -623,6 +613,7 @@ public class VideoFragment extends Fragment
         mMediaRecorder.setOutputFile(getVideoFile(activity).getAbsolutePath());
         mMediaRecorder.setVideoEncodingBitRate(10000000);
         mMediaRecorder.setVideoFrameRate(30);
+        mMediaRecorder.setAudioSamplingRate(441000);
         mMediaRecorder.setVideoSize(mVideoSize.getWidth(), mVideoSize.getHeight());
         mMediaRecorder.setVideoEncoder(MediaRecorder.VideoEncoder.H264);
         mMediaRecorder.setAudioEncoder(MediaRecorder.AudioEncoder.AAC);
@@ -654,6 +645,7 @@ public class VideoFragment extends Fragment
         // UI
         mIsRecordingVideo = false;
         mButtonVideo.setText(R.string.record);
+        textview.setText("Processing...");
 
         try {
             mPreviewSession.stopRepeating();
@@ -665,6 +657,7 @@ public class VideoFragment extends Fragment
         // Stop recording
         mMediaRecorder.stop();
         mMediaRecorder.reset();
+
         Activity activity = getActivity();
         sensorLogger.setVideoFile(getVideoFile(activity));
         sensorLogger.setActivity(activity);
@@ -674,6 +667,7 @@ public class VideoFragment extends Fragment
             Toast.makeText(activity, "Video saved: " + getVideoFile(activity),
                     Toast.LENGTH_SHORT).show();
         }
+        textview.setText("");
         startPreview();
     }
 

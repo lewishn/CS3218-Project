@@ -73,15 +73,6 @@ public class CalibrateFragment extends Fragment
     private float[] accelData = {0, 0, 0};
     private float[] gyroData = {0, 0, 0};
 
-    private static final int  FS = 44100;     // sampling frequency
-    public AudioRecord audioRecord;
-    public Boolean            recording = Boolean.valueOf(true);
-    private int               audioEncoding = 2;
-    private int               nChannels = 16;
-    private Thread            recordingThread;
-    private static short[]    buffer;
-    private static int        bufferSize;
-
     private CaptureRequest.Builder mPreviewBuilder;
     private MediaRecorder mMediaRecorder;
     private boolean mIsRecordingVideo;
@@ -204,12 +195,6 @@ public class CalibrateFragment extends Fragment
         } else {
             mTextureView.setSurfaceTextureListener(mSurfaceTextureListener);
         }
-
-        if (audioRecord != null) {
-            audioRecord.stop();
-            audioRecord.release();
-        }
-        audioRecord = new AudioRecord(1, FS, nChannels, audioEncoding, AudioRecord.getMinBufferSize(FS, nChannels, audioEncoding));
     }
 
     @Override
@@ -225,6 +210,7 @@ public class CalibrateFragment extends Fragment
         switch (view.getId()) {
             case R.id.video: {
                 if (mIsRecordingVideo) {
+                    sensorText.setText("Synchronizing...");
                     stopRecordingVideo();
                 } else {
                     startRecordingVideo();
@@ -233,8 +219,6 @@ public class CalibrateFragment extends Fragment
             }
         }
     }
-
-
 
 
     /**
@@ -324,9 +308,8 @@ public class CalibrateFragment extends Fragment
     }
 
 
-
     /**
-     * Initialises sensors
+     * Initialise sensors
      */
     private void initSensor() {
         sensorManager = (SensorManager)mActivity.getSystemService(mActivity.SENSOR_SERVICE);
@@ -336,7 +319,6 @@ public class CalibrateFragment extends Fragment
         sensorManager.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_GAME);
         sensorText = (TextView) getView().findViewById(R.id.acceleration);
     }
-
 
 
     /**
@@ -361,10 +343,6 @@ public class CalibrateFragment extends Fragment
             e.printStackTrace();
         }
     }
-
-
-
-
 
     /**
      * Gets whether you should show UI with rationale for requesting permissions.
@@ -558,17 +536,11 @@ public class CalibrateFragment extends Fragment
         @Override
         public void onCaptureStarted(CameraCaptureSession session, CaptureRequest request, long timestamp, long frameNumber) {
             super.onCaptureStarted(session, request, timestamp, frameNumber);
-            if (mIsRecordingVideo) {
-                //Log.d("OnCaptureStarted", System.currentTimeMillis() + " " + timestamp);
-            }
         }
 
         @Override
         public void onCaptureCompleted(CameraCaptureSession session, CaptureRequest request, TotalCaptureResult result) {
             super.onCaptureCompleted(session, request, result);
-            if (mIsRecordingVideo) {
-
-            }
         }
     };
 
@@ -618,7 +590,7 @@ public class CalibrateFragment extends Fragment
         mMediaRecorder.setOutputFile(getVideoFile(activity).getAbsolutePath());
         mMediaRecorder.setVideoEncodingBitRate(10000000);
         mMediaRecorder.setVideoFrameRate(30);
-        mMediaRecorder.setAudioSamplingRate(FS);
+        mMediaRecorder.setAudioSamplingRate(44100);
         mMediaRecorder.setVideoSize(mVideoSize.getWidth(), mVideoSize.getHeight());
         mMediaRecorder.setVideoEncoder(MediaRecorder.VideoEncoder.H264);
         mMediaRecorder.setAudioEncoder(MediaRecorder.AudioEncoder.AAC);
@@ -636,20 +608,18 @@ public class CalibrateFragment extends Fragment
 
     private void startRecordingVideo() {
         try {
-            // UI
             mButtonVideo.setText(R.string.stop);
             mIsRecordingVideo = true;
-            sensorLogger = new SensorLogger();
+
             // Start recording
+            sensorLogger = new SensorLogger();
             mMediaRecorder.start();
-            //startRecordingThread();
         } catch (Exception e) {
             e.printStackTrace();
         }
     }
 
     private void stopRecordingVideo() {
-        // UI
         mIsRecordingVideo = false;
         mButtonVideo.setText(R.string.record);
 
@@ -664,15 +634,11 @@ public class CalibrateFragment extends Fragment
         mMediaRecorder.stop();
         mMediaRecorder.reset();
         Activity activity = getActivity();
+
+        // Start Calibration
         sensorLogger.setVideoFile(getVideoFile(activity));
         sensorLogger.setActivity(activity);
         sensorLogger.calibrate();
-        /*
-        try {
-            stopRecordingThread();
-        } catch (Exception e) {
-            e.printStackTrace();
-        }*/
 
         if (null != activity) {
             Toast.makeText(activity, "Video saved: " + getVideoFile(activity),
@@ -744,45 +710,4 @@ public class CalibrateFragment extends Fragment
         }
     }
 
-    public void startRecordingThread() throws Exception {
-        try {
-            if (audioRecord != null) {
-                audioRecord.stop();
-                audioRecord.release();
-            }
-            audioRecord = new AudioRecord(1, FS, nChannels, audioEncoding, AudioRecord.getMinBufferSize(FS, nChannels, audioEncoding));
-        }
-        catch (Exception e) {
-            Log.d("Error in Init() ", e.getMessage());
-        }
-
-        bufferSize = AudioRecord.getMinBufferSize(FS, nChannels, audioEncoding);
-        buffer = new short[bufferSize];
-        sensorLogger = new SensorLogger();
-        audioRecord.startRecording();
-        sensorLogger.setInitialAudioTimeFrame(System.nanoTime());
-        recordingThread = new Thread() {
-            public void run() {
-                while (recording) {
-                    audioRecord.read(buffer, 0, bufferSize);
-                    sensorLogger.addAudioSignals(buffer);
-                }
-            }
-        };
-        recordingThread.start();
-    }
-
-    public void stopRecordingThread() throws InterruptedException {
-        recording = Boolean.valueOf(false);
-        if (audioRecord != null) {
-            audioRecord.stop();
-            audioRecord.release();
-            sensorLogger.setFinalAudioTimeFrame(System.nanoTime());
-        }
-        if (recordingThread != null) {
-            recordingThread.join();
-        }
-        //sensorLogger.calibrateAccelerometer();
-        //sensorLogger.calibrateGyroscope();
-    }
 }

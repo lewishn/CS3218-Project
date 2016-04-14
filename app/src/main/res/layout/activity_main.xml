@@ -30,10 +30,36 @@
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:textSize="50dp"
-        android:text="Sensor Calibration"
-        android:id="@+id/textView"
-        android:layout_alignParentTop="true"
-        android:layout_centerHorizontal="true"
-        android:textAlignment="center" />
+        android:textAppearance="?android:attr/textAppearanceLarge"
+        android:text="1. To calibrate your device, press the calibrate button"
+        android:id="@+id/textView2"
+        android:layout_centerHorizontal="true" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textAppearance="?android:attr/textAppearanceLarge"
+        android:text="2. Place your phone on its side on a flat surface and let it fall to its back "
+        android:id="@+id/textView3"
+        android:layout_below="@+id/textView2"
+        android:layout_centerHorizontal="true" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textAppearance="?android:attr/textAppearanceLarge"
+        android:text="3. Repeat the calibration steps several times for more accurate results"
+        android:id="@+id/textView4"
+        android:layout_below="@+id/textView3"
+        android:layout_centerHorizontal="true" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textAppearance="?android:attr/textAppearanceLarge"
+        android:text="4. Once calibrated, press the record button to capture a video. The frame with least blur should be produced"
+        android:id="@+id/textView5"
+        android:layout_below="@+id/textView4"
+        android:layout_centerHorizontal="true" />
+
 </RelativeLayout>

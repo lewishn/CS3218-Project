@@ -3,16 +3,7 @@ package sg.edu.nus.comp.cs3218_project;
 import android.app.Activity;
 import android.graphics.Bitmap;
 import android.graphics.Color;
-import android.hardware.Sensor;
-import android.hardware.SensorEventListener;
-import android.hardware.SensorManager;
-import android.media.MediaCodec;
-import android.media.MediaExtractor;
-import android.media.MediaFormat;
 import android.media.MediaMetadataRetriever;
-import android.media.MediaMuxer;
-import android.provider.MediaStore;
-import android.support.v4.content.res.TypedArrayUtils;
 import android.util.Log;
 import android.util.Pair;
 
@@ -23,35 +14,24 @@ import java.io.FileOutputStream;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
-import java.lang.reflect.Array;
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 
-/**
- * Created by lewishn on 4/10/2016.
- */
 public class SensorLogger {
-    public Sensor accelerometer;
-    public Sensor gyroscope;
-    public SensorManager sensorManager;
-
     private MediaMetadataRetriever retriever;
     private ArrayList<Short> audioData;
     private ArrayList<Pair<Long, float[]>> accelData;
     private ArrayList<Pair<Long, float[]>> gyroData;
     private ArrayList<Bitmap> imageData;
     private String path;
-    private long audioStart;
     private long audioEnd;
     private Activity activity;
-
-    private static ArrayList<Pair<Long, Long>> accumulated = new ArrayList<>();
+    long accVidSync = 0;
+    long accGyroSync = 0;
 
     SensorLogger() {
-        audioData = new ArrayList<Short>(16384);
         accelData = new ArrayList<Pair<Long, float[]>>();
         gyroData = new ArrayList<Pair<Long, float[]>>();
         imageData = new ArrayList<Bitmap>();
@@ -59,20 +39,6 @@ public class SensorLogger {
 
     public void setActivity(Activity activity) {
        this.activity = activity;
-    }
-
-    public void setInitialAudioTimeFrame(long time) {
-        audioStart = time;
-    }
-
-    public void setFinalAudioTimeFrame(long time) {
-        audioEnd = time;
-    }
-
-    public void addAudioSignals(short[] data) {
-        for (short d : data) {
-            audioData.add(d);
-        }
     }
 
     public void addGyroSignals(long timestamp, float[] data) {
@@ -87,8 +53,12 @@ public class SensorLogger {
         path = file.getAbsolutePath();
     }
 
-
-
+    /**
+     * Calibrates accelerometer, gyroscope, and video/audio
+     * Data 1: Delay between accelerometer and video/audio in nanoseconds
+     * Data 2: Delay between accelerometer and gyroscope in nanoseconds
+     * Results are appended to calibrate.csv file
+     */
     public void calibrate() {
         // For acc and gyro, timestamp is in nanoseconds
         long acc = calibrateAccelerometer();
@@ -105,122 +75,15 @@ public class SensorLogger {
         }catch (IOException e) {
             Log.e("Error CSV", e.getMessage());
         }
-
-        Log.d("SensorLogger: Accel:", "" + acc);
-        Log.d("SensorLogger: Gyro:", "" + gyro);
-        Log.d("SensorLogger: Video:", "" + vid);
     }
 
-    public void extractBestFrame() {
-        long t = pickBest() / 1000;
-        ArrayList<Long> accVidCalib = new ArrayList<>();
-
-        try {
-            File f = new File(activity.getExternalFilesDir(null), "calibrate.csv");
-            BufferedReader reader = new BufferedReader(new FileReader(f));
-            String line = "";
-            while ((line = reader.readLine()) != null) {
-                String[] data = line.split(",");
-                accVidCalib.add(Long.parseLong(data[0]));
-            }
-        } catch (IOException e) {
-            Log.e("Error CSV", e.getMessage());
-            return;
-        }
-
-        long sync = 0;
-        for (Long l : accVidCalib) {
-            sync += l;
-        }
-        sync = sync / accVidCalib.size();
-        sync = sync / 1000;
-
-        retriever = new MediaMetadataRetriever();
-        retriever.setDataSource(path);
-        try {
-            File f = new File(activity.getExternalFilesDir(null), "best-unsync.png");
-            FileOutputStream out = new FileOutputStream(f);
-            Bitmap bmp = retriever.getFrameAtTime(t, MediaMetadataRetriever.OPTION_CLOSEST);
-            bmp.compress(Bitmap.CompressFormat.PNG, 100, out);
-
-            File f2 = new File(activity.getExternalFilesDir(null), "best-sync.png");
-            out = new FileOutputStream(f2);
-            bmp = retriever.getFrameAtTime(t - sync, MediaMetadataRetriever.OPTION_CLOSEST);
-            bmp.compress(Bitmap.CompressFormat.PNG, 100, out);
-        } catch (FileNotFoundException e) {
-            e.printStackTrace();
-        }
-
-    }
-
-    public long calibrateVideo(long t1, long t2) {
-        retriever = new MediaMetadataRetriever();
-        retriever.setDataSource(path);
-
-        long window = 500000;
-        long duration = Long.parseLong(retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION));
-        long startTime = Math.max(0, t1 / 1000 - window);
-        long endTime = Math.min(duration * 1000, t2 / 1000 + window);
-        long resolution = 33333;
-        long t;
-        float[] hsv = new float[3];
-
-        Log.d("SensorLogger: Vid Times:", startTime + "," + endTime);
-        for (t = startTime; t < endTime; t += resolution) {
-            Log.d("SensorLogger: Processing Video Frame", "" + t);
-            Bitmap img = retriever.getFrameAtTime(t, MediaMetadataRetriever.OPTION_CLOSEST);
-            long sum = 0;
-            boolean isBlack = true;
-
-            for (int x = 0; x < img.getWidth(); x++) {
-                for (int y = 0; y < img.getHeight(); y++) {
-                    int c = img.getPixel(x, y);
-                    /*
-                    if (!(Color.blue(c) < 20 && Color.red(c) < 20 && Color.green(c) < 20)) {
-                        isBlack = false;
-                        break;
-                    }
-                    */
-
-                    Color.colorToHSV(c, hsv);
-                    if (hsv[2] > 0.2) {
-                        isBlack = false;
-                        break;
-                    }
-                }
-                if (!isBlack) {
-                    break;
-                }
-            }
-            if (isBlack) {
-                break;
-            }
-        }
-
-        try {
-            File f = new File(activity.getExternalFilesDir(null), "image2.png");
-            FileOutputStream out = new FileOutputStream(f);
-            Bitmap bmp = retriever.getFrameAtTime(t, MediaMetadataRetriever.OPTION_CLOSEST);
-            bmp.compress(Bitmap.CompressFormat.PNG, 100, out);
-
-            File f2 = new File(activity.getExternalFilesDir(null), "image0.png");
-            out = new FileOutputStream(f2);
-            bmp = retriever.getFrameAtTime(t - resolution * 2, MediaMetadataRetriever.OPTION_CLOSEST);
-            bmp.compress(Bitmap.CompressFormat.PNG, 100, out);
-
-            File f3 = new File(activity.getExternalFilesDir(null), "image1.png");
-
-            out = new FileOutputStream(f3);
-            bmp = retriever.getFrameAtTime(t - resolution, MediaMetadataRetriever.OPTION_CLOSEST);
-            bmp.compress(Bitmap.CompressFormat.PNG, 100, out);
-
-        } catch (FileNotFoundException e) {
-            e.printStackTrace();
-        }
-
-        return t * 1000;
-    }
-
+    /**
+     * Finds the timestamp at which impact of the phone with the surface occurs
+     * This point is taken at the point where acceleration in the z axis is greatest,
+     * i.e. The point just before the phone hits the surface and stops moving
+     *
+     * @return the timestamp at which impact occurs
+     */
     public long calibrateAccelerometer() {
         int index = 0;
         float max = 0;
@@ -230,36 +93,22 @@ public class SensorLogger {
                 index = i;
                 max = z(accelData, i);
             }
-
-            Log.d("SensorLogger:Accel", "" + accelData.get(i).first + "[" +
-                    x(accelData, i) + "," + y(accelData, i) + "," + z(accelData, i) + "]");
         }
-
-        Log.d("SensorLogger:", "Accelerometer detected at " + accelData.get(index).first);
         return accelData.get(index).first - accelData.get(0).first;
     }
 
-    public long calibrateAudio(long mid) {
-        long window = 500000000;
-        long duration = audioEnd - audioStart;
-        long resolution = duration / audioData.size();
-
-        long start = Math.max(0, mid - window);
-        long end = Math.min(duration, mid + window);
-        int startIndex = (int) (start / resolution);
-        int endIndex = (int) (end / resolution);
-
-        int index = 0;
-        short max = 0;
-        for (int i = startIndex; i < Math.min(audioData.size(), endIndex); i++) {
-            if (audioData.get(i) > max) {
-                max = audioData.get(i);
-                index = i;
-            }
-        }
-        return resolution * index;
-    }
-
+    /**
+     * Finds the timestamp at which impact of the phone with the surface occurs
+     * This point is taken at the point where the gyroscope value is above a certain threshold,
+     * and subsequent values are below the threshold.
+     *
+     * The timestamp is searched between mid - 0.5s, and mid + 0.5s
+     * This is done to reduce computation, as well as to ignore other movements of the phone which
+     * happen before/after the actual impact.
+     *
+     * @param mid the accelerometer timestamp at which impact occurs
+     * @return the timestamp at which impact occurs
+     */
     public long calibrateGyroscope(long mid) {
         int mid_window = 500000000;
         float threshold = 0.1f;
@@ -291,46 +140,203 @@ public class SensorLogger {
                 index++;
             }
         }
-
-        Log.d("SensorLogger:Gyro:", "Gyroscope detected at " + gyroData.get(index).first);
-        for (int i = 0; i < gyroData.size(); i++) {
-            Log.d("SensorLogger:Gyro", "" + gyroData.get(i).first + "[" + gyroData.get(i).second[0] +
-                "," + gyroData.get(i).second[1] + "," + gyroData.get(i).second[2] + "]");
-        }
         return gyroData.get(index).first - gyroData.get(0).first;
     }
 
+    /**
+     * Finds the timestamp at which impact of the phone with the surface occurs
+     * This is the point where the video frame is completely black
+     *
+     * To reduce computation, the video is checked between from min(acc, gyro) - 0.5s and max(acc, gyro) + 0.5s
+     *
+     * @param t1 min(accelerometer timestamp, gyroscope timestamp)
+     * @param t2 max(accelerometer timestamp, gyroscope timestamp)
+     * @return the video timestamp at which impact occurs
+     */
+    public long calibrateVideo(long t1, long t2) {
+        retriever = new MediaMetadataRetriever();
+        retriever.setDataSource(path);
+
+        long window = 500000;
+        long duration = Long.parseLong(retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION));
+        long startTime = Math.max(0, t1 / 1000 - window);
+        long endTime = Math.min(duration * 1000, t2 / 1000 + window);
+        long resolution = 33333;
+        long t;
+        float[] hsv = new float[3];
+
+        for (t = startTime; t < endTime; t += resolution) {
+            Bitmap img = retriever.getFrameAtTime(t, MediaMetadataRetriever.OPTION_CLOSEST);
+            long sum = 0;
+            boolean isBlack = true;
+
+            for (int x = 0; x < img.getWidth(); x++) {
+                for (int y = 0; y < img.getHeight(); y++) {
+                    int c = img.getPixel(x, y);
+                    Color.colorToHSV(c, hsv);
+                    if (hsv[2] > 0.2) {
+                        isBlack = false;
+                        break;
+                    }
+                }
+                if (!isBlack) {
+                    break;
+                }
+            }
+            if (isBlack) {
+                break;
+            }
+        }
+        return t * 1000;
+    }
+
+    /*
+     * x coordinate value
+     */
     public float x(ArrayList<Pair<Long, float[]>> pair, int index) {
        return pair.get(index).second[0];
     }
+
+    /*
+     * y coordinate value
+     */
     public float y(ArrayList<Pair<Long, float[]>> pair, int index) {
         return pair.get(index).second[1];
     }
+
+    /*
+     * z coordinate value
+     */
     public float z(ArrayList<Pair<Long, float[]>> pair, int index) {
         return pair.get(index).second[2];
     }
 
-    public long pickBest() {
-        ArrayList<Pair<Long, float[]>> bestAccValues = new ArrayList<>();
-        for (int i = 0; i < accelData.size(); i++) {
-            double value = val(accelData.get(i).second);
-            if (value < 10.3 && value > 9.5) {
-                bestAccValues.add(accelData.get(i));
+
+    /**
+     * Extracts the frame with least blur from an input video and its corresponging
+     * accelerometer/gyroscope data
+     */
+    public void extractBestFrame() {
+        long t = pickBest() / 1000;
+        ArrayList<Long> accVidCalib = new ArrayList<>();
+        ArrayList<Long> accGyroCalib = new ArrayList<>();
+
+        try {
+            File f = new File(activity.getExternalFilesDir(null), "calibrate.csv");
+            BufferedReader reader = new BufferedReader(new FileReader(f));
+            String line = "";
+            while ((line = reader.readLine()) != null) {
+                String[] data = line.split(",");
+                accVidCalib.add(Long.parseLong(data[0]));
+                accGyroCalib.add(Long.parseLong(data[1]));
             }
+        } catch (IOException e) {
+            Log.e("Error CSV", e.getMessage());
+            return;
         }
 
-        Collections.sort(bestAccValues, new Comparator<Pair<Long, float[]>>() {
+        for (int i = 0; i < accVidCalib.size(); i++) {
+            accVidSync += accVidCalib.get(i);
+            accGyroSync += accGyroCalib.get(i);
+        }
+
+        accVidSync = accVidSync / accVidCalib.size();
+        accGyroSync = accGyroSync / accGyroCalib.size();
+
+        accVidSync = accVidSync / 1000;
+
+        retriever = new MediaMetadataRetriever();
+        retriever.setDataSource(path);
+        try {
+            File f = new File(activity.getExternalFilesDir(null), "best-unsync.png");
+            FileOutputStream out = new FileOutputStream(f);
+            Bitmap bmp = retriever.getFrameAtTime(t, MediaMetadataRetriever.OPTION_CLOSEST);
+            bmp.compress(Bitmap.CompressFormat.PNG, 100, out);
+
+            File f2 = new File(activity.getExternalFilesDir(null), "best-sync.png");
+            out = new FileOutputStream(f2);
+            bmp = retriever.getFrameAtTime(t - accVidSync, MediaMetadataRetriever.OPTION_CLOSEST);
+            bmp.compress(Bitmap.CompressFormat.PNG, 100, out);
+        } catch (FileNotFoundException e) {
+            e.printStackTrace();
+        }
+    }
+
+    /**
+     * Get the timestamp at which the video has least movement
+     *
+     * @return timestamp at which the video has least movement
+     */
+    public long pickBest() {
+        long initial = accelData.get(0).first;
+        Collections.sort(accelData, new Comparator<Pair<Long, float[]>>() {
             @Override
             public int compare(Pair<Long, float[]> lhs, Pair<Long, float[]> rhs) {
-                return (int) (val(lhs.second) - val(rhs.second));
+                return Double.compare(val2(lhs.second), val2(rhs.second));
             }
         });
 
-        return bestAccValues.get(0).first - accelData.get(0).first;
+        return findBestTimestamp(accelData) - initial;
+    }
+
+    /**
+     * Returns the timestamp at which the video has least movement
+     * The accelerometer data corresponding to least movement, and those within a certain percentage of this value is chosen.
+     * For these accelerometer data, the corresponding gyroscope data is found.
+     * The choice of which timestamp to pick is then ranked using both accelerometer and gyroscope data.
+     *
+     * Through experimentation, we found linear movement to contribute more to blur, and thus, the
+     * accelerometer value contributes more to the choice of timestamp
+     *
+     * @param accel accelerometer data sorted in ascending order by magnitude
+     * @return
+     */
+    public Long findBestTimestamp(ArrayList<Pair<Long, float[]>> accel) {
+        ArrayList<Pair<Long, Double>> bestAccelData = new ArrayList<Pair<Long, Double>>();
+        ArrayList<Double> bestGyroData = new ArrayList<Double>();
+
+        bestAccelData.add(new Pair<Long, Double>(accel.get(0).first, val(accel.get(0).second)));
+        for (int i = 1; i < accel.size(); i++) {
+            double v = val(accel.get(i).second);
+            if (v / bestAccelData.get(0).second < 0.1) {
+                bestAccelData.add(new Pair<Long, Double>(accel.get(i).first, v));
+            } else {
+                break;
+            }
+        }
+
+        for (int i = 0; i < bestAccelData.size(); i++) {
+            long diff = Long.MAX_VALUE;
+            for (int j = 0; j < gyroData.size(); j++) {
+                long d = Math.abs(bestAccelData.get(i).first - gyroData.get(j).first - accGyroSync);
+                if (d <= diff) {
+                    diff = d;
+                } else {
+                    bestGyroData.add(val2(gyroData.get(j).second));
+                    break;
+                }
+            }
+        }
+
+        double minVal = Double.MAX_VALUE;
+        int minIndex = 0;
+        for (int i = 0; i < bestAccelData.size(); i++) {
+            double v = bestAccelData.get(i).second + 0.5 * bestGyroData.get(i);
+            if (v < minVal) {
+                minVal = v;
+                minIndex = i;
+            }
+        }
+
+        return bestAccelData.get(minIndex).first;
     }
 
 
     public double val(float[] v) {
         return Math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
+    }
+
+    public double val2(float[] v) {
+        return Math.abs(v[0]) + Math.abs(v[1]) + Math.abs(v[2]);
     }
 }
