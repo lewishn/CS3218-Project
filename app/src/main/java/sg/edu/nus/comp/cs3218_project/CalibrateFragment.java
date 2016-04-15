@@ -641,7 +641,7 @@ public class CalibrateFragment extends Fragment
         sensorLogger.calibrate();
 
         if (null != activity) {
-            Toast.makeText(activity, "Video saved: " + getVideoFile(activity),
+            Toast.makeText(activity, "Calibration completed",
                     Toast.LENGTH_SHORT).show();
         }
         startPreview();

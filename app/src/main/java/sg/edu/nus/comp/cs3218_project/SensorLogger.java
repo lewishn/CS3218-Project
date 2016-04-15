@@ -60,21 +60,26 @@ public class SensorLogger {
      * Results are appended to calibrate.csv file
      */
     public void calibrate() {
-        // For acc and gyro, timestamp is in nanoseconds
+        String accelCSV = "";
+        String gyroCSV = "";
+        for (Pair<Long, float[]> p : accelData) {
+            accelCSV += p.first + "," + p.second[0] + "," + p.second[1] + "," + p.second[2] + System.lineSeparator();
+        }
+        for (Pair<Long, float[]> p : gyroData) {
+            gyroCSV += p.first + "," + p.second[0] + "," + p.second[1] + "," + p.second[2] + System.lineSeparator();
+        }
+
         long acc = calibrateAccelerometer();
         long gyro = calibrateGyroscope(acc);
         long vid = calibrateVideo(Math.min(acc, gyro), Math.max(acc, gyro));
 
-        String t = (acc - vid) + "," + (acc - gyro);
-        try {
-            File f = new File(activity.getExternalFilesDir(null), "calibrate.csv");
-            FileWriter writer = new FileWriter(f, true);
-            writer.write(t + System.lineSeparator());
-            writer.flush();
-            writer.close();
-        }catch (IOException e) {
-            Log.e("Error CSV", e.getMessage());
-        }
+        String calibCSV = (acc - vid) + "," + (acc - gyro) + System.lineSeparator();
+        writeToCSV(calibCSV, "calibrate.csv", true);
+        writeToCSV(accelCSV, "accelerometer.csv", false);
+        writeToCSV(gyroCSV, "gyroscope.csv", false);
+        writeImage(vid/1000 - 66666, "img01.png");
+        writeImage(vid/1000 - 33333, "img02.png");
+        writeImage(vid/1000, "img03.png");
     }
 
     /**
@@ -245,21 +250,8 @@ public class SensorLogger {
 
         accVidSync = accVidSync / 1000;
 
-        retriever = new MediaMetadataRetriever();
-        retriever.setDataSource(path);
-        try {
-            File f = new File(activity.getExternalFilesDir(null), "best-unsync.png");
-            FileOutputStream out = new FileOutputStream(f);
-            Bitmap bmp = retriever.getFrameAtTime(t, MediaMetadataRetriever.OPTION_CLOSEST);
-            bmp.compress(Bitmap.CompressFormat.PNG, 100, out);
-
-            File f2 = new File(activity.getExternalFilesDir(null), "best-sync.png");
-            out = new FileOutputStream(f2);
-            bmp = retriever.getFrameAtTime(t - accVidSync, MediaMetadataRetriever.OPTION_CLOSEST);
-            bmp.compress(Bitmap.CompressFormat.PNG, 100, out);
-        } catch (FileNotFoundException e) {
-            e.printStackTrace();
-        }
+        writeImage(t, "Unsynchronised.png");
+        writeImage(t - accVidSync, "Synchronised.png");
     }
 
     /**
@@ -338,5 +330,30 @@ public class SensorLogger {
 
     public double val2(float[] v) {
         return Math.abs(v[0]) + Math.abs(v[1]) + Math.abs(v[2]);
+    }
+
+    private void writeImage(long timestamp, String filename) {
+        retriever = new MediaMetadataRetriever();
+        retriever.setDataSource(path);
+        try {
+            File f = new File(activity.getExternalFilesDir(null), filename);
+            FileOutputStream out = new FileOutputStream(f);
+            Bitmap bmp = retriever.getFrameAtTime(timestamp, MediaMetadataRetriever.OPTION_CLOSEST);
+            bmp.compress(Bitmap.CompressFormat.PNG, 100, out);
+        } catch (FileNotFoundException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void writeToCSV(String s, String filename, boolean append) {
+        try {
+            File f = new File(activity.getExternalFilesDir(null), filename);
+            FileWriter writer = new FileWriter(f, append);
+            writer.write(s);
+            writer.flush();
+            writer.close();
+        }catch (IOException e) {
+            Log.e("WriteToCSV", e.getMessage());
+        }
     }
 }
